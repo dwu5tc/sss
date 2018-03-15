@@ -55,11 +55,11 @@ const foo = () => {
 	console.log('bye');
 };
 
-// difference between these two???
+// what's the difference
 const scrapItemDelayedTest = (url, ms) => {
 	return new Promise((resolve, reject) => {
 		delay(ms)
-			.then(scrapItemTest(resp))
+			.then(scrapeItemTest(resp)) // returns undefined!!!
 			.then(resp => resolve(resp));
 	})
 }
@@ -67,6 +67,14 @@ const scrapItemDelayedTest = (url, ms) => {
 const scrapeItemDelayedTest2 = (url, ms) => {
 	return new Promise((resolve, reject) => {
 		delay(ms)
-			.then(resolve(scrapeItemTest(url)));
+			.then(resolve(scrapeItemTest(url))); // no delay here!!!
+	});
+};
+
+const scrapeItemDelayedTest2 = (url, ms) => {
+	return new Promise((resolve, reject) => {
+		delay(ms)
+			.then(() => scrapeItemTest(url))
+			.then(resp => resolve(resp));
 	});
 };

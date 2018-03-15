@@ -1,3 +1,12 @@
+// todos
+// try to add a delay after request to target
+// add option to break out of sequential promises early
+// try the recursive method
+// restructure the database
+// handle inserting html
+// deal with images
+// write db insert serial
+
 'use strict';
 
 const request = require('request'),
@@ -7,12 +16,8 @@ const request = require('request'),
 const sequelize = new Sequelize('postgres://postgres:blahblah75@localhost:5432/supremedb');
 
 const target = 'http://www.supremenewyork.com/shop/new';
-const DELAY_TIME = 2000;
 
-let items = {};
-let itemsSet = new Set();
-
-console.log('beginning scrape');
+console.log('beginning scrape.js');
 
 const getURLsPromise = url => {
 	return new Promise((resolve, reject) => {
@@ -40,10 +45,22 @@ const getURLsPromise = url => {
 	});
 };
 
-const sequentialPromises = (funcs) => {
+// const sequentialPromises = funcs =>
+// 	funcs.reduce((promise, func) =>
+// 	promise.then(result => {
+// 		console.info(result);
+// 		return func().then(Array.prototype.concat.bind(result));
+// 	}),
+// 	Promise.resolve([]))
+
+const sequentialPromises = funcs => {
+	console.log('starting sequentual promises');
 	return funcs.reduce((promise, func) => {
-		return promise.then(res =>
-			func().then(item => res.concat(item)));
+		return promise.then(res => {
+			return func().then(item => {
+				return res.concat(item);
+			});
+		});
 	}, Promise.resolve([]));
 };
 
@@ -56,51 +73,88 @@ const delay = ms => {
 const delayedFunc = (func, ms) => {
 	return new Promise((resolve, reject) => {
 		delay(ms) // should this be returned???
-			.then(resolve(func)); // should func be called with brackets???
+			.then(resolve(func())); // should it be func or func()???
 	});
 };
 
-// const scrapeItem = url => {
-// 	return request(urls[i], (err, resp, body) => {
-// 		const $ = cheerio.load(body);
-
-// 		let item = {};
-// 		item.name = $('h1.protect').html();
-// 		console.log(item.name);
-// 		item.category = $('h1.protect').attr('data-category');
-// 		console.log(item.category);
-// 		item.price = $('span', 'p.price').html();
-// 		console.log(item.price);
-// 		item.price = item.price.substring(1, item.price.length);
-// 		console.log(item.price);
-// 		item.description = $('p.description').html().trim();
-// 		console.log(item.description);
-// 		item.text = body;
-// 		i++;
-// 		insertItem(item);
-// 		setTimeout(() => {
-// 			getOne(i, urls);
-// 		}, 500 + (Math.random()*400));
-// 	});
-// };
+const scrapeItem = url => {
+	return new Promise((resolve, reject) => {
+		return request(url, (err, resp, body) => {
+			const $ = cheerio.load(body, {
+				decodeEntities: false
+			});
+			let item = {};
+			let name = $('h1.protect').html();
+			let category = $('h1.protect').attr('data-category');
+			let colour = $('p.style.protect').html();
+			let price = $('span', 'p.price').html();
+			price = parseInt(price.substring(1, price.length)); // remove $
+			let description = $('p.description').html().trim();
+			let collaborators = [];
+			if (name.includes('/')) {
+				const words = name.split(' ');
+				collaborators = words[0].split('/');
+				collaborators.shift(); // remove supreme 
+				collaborators = collaborators.map(collaborator => collaborator.replace(/®/, '')) //
+				collaborators = JSON.stringify(collaborators);
+			}
+			console.log(name);
+			// console.log(category);
+			// console.log(colour);
+			// console.log(price);
+			// console.log(description);
+			// if (collaborators.length > 0) {
+			// 	console.info(collaborators);
+			// }
+			let html = body; // remove this later
+			item = {
+				name,
+				category,
+				colour,
+				price,
+				description,
+				collaborators// how to handle null collaborators???
+				// html
+			};
+			// console.info(item);
+			resolve(item);
+		});
+	})
+};
 
 const scrapeItemTest = url => {
+	console.log('starting scrape item test');
 	return new Promise((resolve, reject) => {
 		request(url, (err, resp, body) => {
-			const $ = cheerio.load(body);
-			const name = ($('h1.protect').html());
-			console.log('name: ' + name);
-			resolve(name);
+			if (!err) {
+				const $ = cheerio.load(body, {
+						decodeEntities: false
+					});
+				console.log('request of scrape item test finished');
+				const name = ($('h1.protect').html());
+				console.log(name);
+				resolve(name);
+				console.log('resolved scrapeitemtest');
+			} else {
+				reject(err);
+			}
 		});
 	});
+};
+
+const scrapeItemDelayed = (url, ms) => {
+	return new Promise((resolve, reject) => {
+		delay(ms)
+			.then(() => scrapeItem(url))
+			.then(resp => resolve(resp));
+	})
 };
 
 // difference between these???
 const scrapeItemDelayedTest = (url, ms) => {
 	return new Promise((resolve, reject) => {
 		delay(ms)
-			.then(scrapeItemTest(url))
-			.then(resp => resolve(resp));
+			.then(resolve(scrapeItemTest(url)));
 	})
 };
 
@@ -111,30 +165,47 @@ const scrapeItemDelayedTest = (url, ms) => {
 // 	});
 // };
 
+// scrapeItem('http://www.supremenewyork.com/shop/jackets/mvg0bjte6/glhqz5gfw')
+// 	.then(resp => {
+// 		console.info(resp);
+// 		insertItem(resp);
+// 	});
+
 getURLsPromise(target)
 	.then(resp => {
 		console.log('starting');
-		const funcsTest = resp.map(url => () => scrapeItemDelayedTest(url, 2000));
-		console.log('funcsTest length: ' + funcsTest.length);
-		return sequentialPromises(funcsTest);
+		const scrapeFuncs = resp.map(url => () => scrapeItemDelayed(url, 750 + Math.floor(Math.random() * 750)));
+		console.log('scrapeFuncs length: ' + scrapeFuncs.length);
+		resp.forEach(url => console.log(url));
+		return sequentialPromises(scrapeFuncs);
 	})
 	.then(resp => {
 		console.log('here');
 		console.log(typeof resp);
-		resolve('hi');
+		const insertFuncs = resp.map(item => () => insertItem(item));
+		resp.forEach(item => console.info(item));
+		insertFuncs.forEach(func => {
+			func();
+		});
 	})
 	.then(resp => {
 		console.log('here2');
 		console.log(typeof resp, resp);
+		return;
 	});
 
-// function insertItem(item) {
-// 	sequelize.
-// 		query(`INSERT INTO items (season, name, price, desc, week, cat)
-// 			VALUES ('SS18', '${item.name}', ${item.price}, '${item.description}', 1, '${item.category}')`, 
-// 			{ raw: true})
-// 		.then(response => {
-// 			console.log('insert successful');
-// 			console.log(response);
-// 		});
-// }
+function insertItem(item) {
+	let sql = `INSERT INTO items_temp (season, week, name, category, colour, price, description, collaborators)
+			VALUES ('SS18', 3, '${item.name}', '${item.category}', '${item.colour}', '${item.price}', '${item.description}', '${item.collaborators}')`;
+	return sequelize.
+		query(sql, { raw: true })
+		.spread((results, metadata) => {
+			console.log('insert successful');
+			console.log(results);
+			console.log(metadata);
+		})
+		.catch(err => {
+			console.log('insert failed');
+			console.log(err);
+		});
+}
